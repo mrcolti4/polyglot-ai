@@ -8,7 +8,7 @@ import {
   Res,
 } from "routing-controllers";
 
-import { IUserRegister } from "./User.type";
+import { IUserInfo, IUserRegister } from "./User.type";
 import { ApiResponse } from "helpers/ApiResponse";
 import { db } from "Firebase";
 
@@ -21,7 +21,10 @@ export default class User {
     const user = await admin
       .auth()
       .createUser({ email, password, displayName });
-    const response = await db.collection("users").doc().set({ subscription });
+    const response = await db
+      .collection("user-info")
+      .doc(user.uid)
+      .set({ subscription });
 
     console.log(response);
 
@@ -30,5 +33,12 @@ export default class User {
       user,
       `Created a new user with ${user.uid} id`
     );
+  }
+
+  @Post("/update/:id")
+  async updateUser(@Body() body: IUserInfo, @Param("id") id: string) {
+    const response = await admin.auth().updateUser(id, body);
+
+    return new ApiResponse(true, response, `${response.toJSON()}`);
   }
 }

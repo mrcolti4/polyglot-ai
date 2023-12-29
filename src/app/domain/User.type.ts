@@ -5,7 +5,8 @@ export interface IUserRegister {
   subscription: string;
 }
 
-export interface IUserLogin {
-  email: string;
-  password: string;
+export interface IUserInfo {
+  displayName?: string;
+  password?: string;
+  email?: string;
 }
