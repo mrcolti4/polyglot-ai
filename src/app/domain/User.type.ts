@@ -10,3 +10,7 @@ export interface IUserInfo {
   password?: string;
   email?: string;
 }
+
+export interface IUserResetPassword {
+  email: string;
+}
