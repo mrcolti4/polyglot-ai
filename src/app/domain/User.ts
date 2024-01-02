@@ -14,12 +14,7 @@ export default class User {
     const user = await admin
       .auth()
       .createUser({ email, password, displayName });
-    const response = await db
-      .collection("user-info")
-      .doc(user.uid)
-      .set({ subscription });
-
-    console.log(response);
+    await db.collection("user-info").doc(user.uid).set({ subscription });
 
     return new ApiResponse(
       true,
