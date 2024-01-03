@@ -1,4 +1,4 @@
 node_modules
 compose.yaml
-firebase
+secret
 README.Docker.md
