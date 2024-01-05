@@ -1,22 +1,35 @@
 import OpenAI from "openai";
-import { JsonController, Get, Post, Body, Param } from "routing-controllers";
+import {
+  JsonController,
+  UseBefore,
+  Get,
+  Post,
+  Body,
+  Param,
+  Req,
+} from "routing-controllers";
 
 import { ApiResponse } from "../../helpers/ApiResponse";
 import { IPolyglotConversation } from "./Polyglot.types";
+import { Authenticate } from "app/middlewares/authenticate";
+import { AuthRequest } from "types/controllerAction";
 
 import { db } from "Firebase";
 import { openai } from "Chat";
 
 @JsonController("/polyglot")
+@UseBefore(Authenticate)
 export default class Polyglot {
-  @Post("/start-conversation/:id")
+  @Post("/start-conversation")
   async startConversation(
     @Body() body: IPolyglotConversation,
-    @Param("id") id: string,
+    @Req() req: AuthRequest,
   ) {
+    const { user } = req;
+    console.log(user);
     const response = await db
       .collection("user-info")
-      .doc(id)
+      .doc(user.uid)
       .update({ conversations: [{ ...body }] });
 
     return new ApiResponse(true, body, `Update document ${response}`);

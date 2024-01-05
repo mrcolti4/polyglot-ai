@@ -10,11 +10,11 @@ export default class User {
   @Post("/create")
   async registerNewUser(@Body() body: IUserRegister) {
     const { email, password, displayName, subscription } = body;
+    const auth = admin.auth();
 
-    const user = await admin
-      .auth()
-      .createUser({ email, password, displayName });
-    await db.collection("user-info").doc(user.uid).set({ subscription });
+    const user = await auth.createUser({ email, password, displayName });
+    const token = await auth.createCustomToken(user.uid);
+    await db.collection("user-info").doc(user.uid).set({ subscription, token });
 
     return new ApiResponse(
       true,
