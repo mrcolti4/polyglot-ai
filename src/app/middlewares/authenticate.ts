@@ -30,9 +30,11 @@ export class Authenticate implements ExpressMiddlewareInterface {
 
       next();
     } catch (error) {
-      next(
-        new ApiError(401, { code: "UNAUTHORIZED", message: "Not authorized" }),
-      );
+      console.log(error);
+      throw new ApiError(401, {
+        code: "UNAUTHORIZED",
+        message: "Not authorized",
+      });
     }
   }
 }
