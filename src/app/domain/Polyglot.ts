@@ -16,10 +16,24 @@ import { AuthRequest } from "types/controllerAction";
 
 import { db } from "Firebase";
 import { openai } from "Chat";
+import { ApiError } from "helpers/ApiError";
 
 @JsonController("/polyglot")
 @UseBefore(Authenticate)
 export default class Polyglot {
+  @Get("/get-info")
+  async getSecretInfo() {
+    const data = await db
+      .collection("secured-info")
+      .doc("UCRw3hIrBb1GBiSuBukr")
+      .get();
+    if (!data.exists) {
+      return new ApiError(404, { code: "NOT_FOUND", message: "Not found" });
+    }
+
+    return new ApiResponse(true, data.data(), `Get secured data`);
+  }
+
   @Post("/start-conversation")
   async startConversation(
     @Body() body: IPolyglotConversation,
@@ -27,12 +41,17 @@ export default class Polyglot {
   ) {
     const { user } = req;
     console.log(user);
-    const response = await db
-      .collection("user-info")
-      .doc(user.uid)
-      .update({ conversations: [{ ...body }] });
+    const userInfo = db.collection("user-info").doc(user.uid);
+    const userDoc = await userInfo.get();
+    if (userDoc.exists) {
+      userInfo.update({ conversation: [{ ...body }] });
 
-    return new ApiResponse(true, body, `Update document ${response}`);
+      return new ApiResponse(true, body, `Update document ${user.uid}`);
+    } else {
+      userInfo.create({ conversation: [{ ...body }] });
+
+      return new ApiResponse(true, body, `Create document ${user.uid}`);
+    }
   }
 
   @Post("/send-message")
