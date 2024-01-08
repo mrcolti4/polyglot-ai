@@ -3,7 +3,6 @@ import { JsonController, Get, Post, Body, Param } from "routing-controllers";
 
 import { IUserInfo, IUserRegister, IUserResetPassword } from "./User.type";
 import { ApiResponse } from "helpers/ApiResponse";
-import { db } from "Firebase";
 
 @JsonController("/user")
 export default class User {
@@ -13,13 +12,12 @@ export default class User {
     const auth = admin.auth();
 
     const user = await auth.createUser({ email, password, displayName });
-    const token = await auth.createCustomToken(user.uid);
-    await db.collection("user-info").doc(user.uid).set({ subscription, token });
+    const token = await auth.createCustomToken(user.uid, { subscription });
 
     return new ApiResponse(
       true,
-      user,
-      `Created a new user with ${user.uid} id`,
+      token,
+      `Created a new user with ${user.uid} id, token: ${token}`,
     );
   }
 

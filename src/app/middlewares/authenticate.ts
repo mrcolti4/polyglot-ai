@@ -1,6 +1,5 @@
 import type { NextFunction, Response } from "express";
 import type { ExpressMiddlewareInterface } from "routing-controllers";
-import { Middleware } from "routing-controllers";
 import admin from "firebase-admin";
 
 import { ApiError } from "../../helpers/ApiError";
@@ -18,7 +17,7 @@ export class Authenticate implements ExpressMiddlewareInterface {
       });
     }
     try {
-      const user = await admin.auth().verifyIdToken(token);
+      const user = await auth.verifyIdToken(token);
 
       if (!user) {
         throw new ApiError(401, {
