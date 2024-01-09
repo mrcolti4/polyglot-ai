@@ -40,7 +40,6 @@ export default class Polyglot {
     @Req() req: AuthRequest,
   ) {
     const { user } = req;
-    console.log(user);
     const userInfo = db.collection("user-info").doc(user.uid);
     const userDoc = await userInfo.get();
     if (userDoc.exists) {
