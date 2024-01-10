@@ -8,6 +8,7 @@ import {
   Param,
   Req,
 } from "routing-controllers";
+import { Request } from "express";
 
 import { ApiResponse } from "../../helpers/ApiResponse";
 import { IPolyglotConversation } from "./Polyglot.types";
@@ -22,11 +23,9 @@ import { ApiError } from "helpers/ApiError";
 @UseBefore(Authenticate)
 export default class Polyglot {
   @Get("/get-info")
-  async getSecretInfo() {
-    const data = await db
-      .collection("secured-info")
-      .doc("UCRw3hIrBb1GBiSuBukr")
-      .get();
+  async getSecretInfo(@Req() req: AuthRequest) {
+    const { user } = req;
+    const data = await db.collection("secured-info").doc(user.uid).get();
     if (!data.exists) {
       return new ApiError(404, { code: "NOT_FOUND", message: "Not found" });
     }
@@ -43,14 +42,13 @@ export default class Polyglot {
     const userInfo = db.collection("user-info").doc(user.uid);
     const userDoc = await userInfo.get();
     if (userDoc.exists) {
-      userInfo.update({ conversation: [{ ...body }] });
+      await userInfo.update({ conversation: [{ ...body }] });
 
       return new ApiResponse(true, body, `Update document ${user.uid}`);
-    } else {
-      userInfo.create({ conversation: [{ ...body }] });
-
-      return new ApiResponse(true, body, `Create document ${user.uid}`);
     }
+    await userInfo.create({ conversation: [{ ...body }] });
+
+    return new ApiResponse(true, body, `Create document ${user.uid}`);
   }
 
   @Post("/send-message")
