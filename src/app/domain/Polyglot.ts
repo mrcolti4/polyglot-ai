@@ -8,6 +8,7 @@ import {
   Param,
   Req,
 } from "routing-controllers";
+import { Request } from "express";
 
 import { ApiResponse } from "../../helpers/ApiResponse";
 import { IPolyglotConversation } from "./Polyglot.types";
@@ -16,23 +17,38 @@ import { AuthRequest } from "types/controllerAction";
 
 import { db } from "Firebase";
 import { openai } from "Chat";
+import { ApiError } from "helpers/ApiError";
 
 @JsonController("/polyglot")
 @UseBefore(Authenticate)
 export default class Polyglot {
+  @Get("/get-info")
+  async getSecretInfo(@Req() req: AuthRequest) {
+    const { user } = req;
+    const data = await db.collection("secured-info").doc(user.uid).get();
+    if (!data.exists) {
+      return new ApiError(404, { code: "NOT_FOUND", message: "Not found" });
+    }
+
+    return new ApiResponse(true, data.data(), `Get secured data`);
+  }
+
   @Post("/start-conversation")
   async startConversation(
     @Body() body: IPolyglotConversation,
     @Req() req: AuthRequest,
   ) {
     const { user } = req;
-    console.log(user);
-    const response = await db
-      .collection("user-info")
-      .doc(user.uid)
-      .update({ conversations: [{ ...body }] });
+    const userInfo = db.collection("user-info").doc(user.uid);
+    const userDoc = await userInfo.get();
+    if (userDoc.exists) {
+      await userInfo.update({ conversation: [{ ...body }] });
 
-    return new ApiResponse(true, body, `Update document ${response}`);
+      return new ApiResponse(true, body, `Update document ${user.uid}`);
+    }
+    await userInfo.create({ conversation: [{ ...body }] });
+
+    return new ApiResponse(true, body, `Create document ${user.uid}`);
   }
 
   @Post("/send-message")

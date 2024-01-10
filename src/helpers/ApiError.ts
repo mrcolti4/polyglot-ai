@@ -18,6 +18,7 @@ export class ApiError extends HttpError {
     this.error = { ...error, status, code: error.code || "INTERNAL_ERROR" };
     this.name = "ApiError";
     this.message = error.message || "";
+    Object.setPrototypeOf(this, ApiError.prototype);
   }
 
   public toJson = (): MessageInterface => {
