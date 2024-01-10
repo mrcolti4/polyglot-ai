@@ -1,5 +1,5 @@
 import type { NextFunction, Response } from "express";
-import type { ExpressMiddlewareInterface } from "routing-controllers";
+import { type ExpressMiddlewareInterface } from "routing-controllers";
 import admin from "firebase-admin";
 
 import { ApiError } from "../../helpers/ApiError";
@@ -30,11 +30,12 @@ export class Authenticate implements ExpressMiddlewareInterface {
 
       next();
     } catch (error) {
-      console.log(error);
-      throw new ApiError(401, {
-        code: "UNAUTHORIZED",
-        message: "Not authorized",
-      });
+      next(
+        new ApiError(401, {
+          code: "UNAUTHORIZED",
+          message: `Not authorized. ${error.errorInfo.code}`,
+        }),
+      );
     }
   }
 }
