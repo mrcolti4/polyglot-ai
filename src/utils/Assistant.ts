@@ -1,36 +1,17 @@
+import { openai } from "Chat";
+import { IPolyglotConversation } from "app/domain/Polyglot.types";
 import OpenAI from "openai";
-import { openai } from "../Chat";
-
-export interface IPolyglotConversation {
-  chatRole: string;
-  userRole: string;
-  language: string;
-}
 
 export class Assistant {
-  private static instance: Assistant;
-  protected conversation: IPolyglotConversation;
-  private assistant: OpenAI.Beta.Assistant;
-  /**
-   *
-   */
+  constructor() {}
 
-  constructor() {
-    if (!Assistant.instance) {
-      Assistant.instance = this;
-    }
-
-    return Assistant.instance;
-  }
-
-  async init(
-    conversation: IPolyglotConversation,
-  ): Promise<OpenAI.Beta.Assistant> {
-    return await openai.beta.assistants.create({
+  async initAssitant(body: IPolyglotConversation): Promise<string> {
+    const assistant = await openai.beta.assistants.create({
       name: "Polyglot",
-      instructions: `Please address the user as ${conversation.userRole}. Play the role of ${conversation.chatRole}. Answer only in ${conversation.language}.`,
+      instructions: `Please address the user as ${body.userRole}. Play the role of ${body.chatRole}. Answer only in ${body.language}`,
       model: "gpt-3.5-turbo",
     });
+    return assistant.id;
   }
 
   async createThread(): Promise<string> {
@@ -39,40 +20,30 @@ export class Assistant {
     return thread.id;
   }
 
-  async addMesageToThread(
-    threadId: string,
-    assistantId: string,
-    content: string,
-  ) {
-    // Add message to thread
-    await openai.beta.threads.messages.create(threadId, {
+  async addMessageToThread(threadId, assitantId, content) {
+    const message = await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content,
     });
-    // Run thread and waiting response from assistant
-    const run = await openai.beta.threads.runs.create(threadId, {
-      assistant_id: assistantId,
+    const runData = await openai.beta.threads.runs.create(threadId, {
+      assistant_id: assitantId,
     });
-    // Waiting until the status will change on completed
-    let runStatus = run.status;
+    let runStatus = runData.status;
     while (runStatus === "queued" || runStatus === "in_progress") {
+      console.log("Polling for run status...");
       await new Promise((resolve) => setTimeout(resolve, 700));
-      // Check current status
       const statusData = await openai.beta.threads.runs.retrieve(
         threadId,
-        run.id,
+        runData.id,
       );
-
+      console.log(`Current status: ${statusData.status}`);
       runStatus = statusData.status;
-      console.log(`Current status: ${runStatus}`);
     }
-    // If status is completed we are returning the last messages from thread
     if (runStatus === "completed") {
       const messages = await openai.beta.threads.messages.list(threadId);
       for (let i = 0; i < messages.data.length; i++) {
-        const element = messages.data[i];
-        console.log(element.content[0]);
-        console.log(element.content);
+        const message = messages.data[0].content;
+        console.log(message);
       }
       return messages.data;
     }
