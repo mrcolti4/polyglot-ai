@@ -1,11 +1,11 @@
-import { openai } from "Chat";
-import { IPolyglotConversation } from "app/domain/Polyglot.types";
-import OpenAI from "openai";
+import { openai } from "utils/Chat";
+import { ISendMessage } from "types/send-message";
+import { IAssistantInstructions } from "types/assistant-instructions";
 
 export class Assistant {
   constructor() {}
 
-  async initAssitant(body: IPolyglotConversation): Promise<string> {
+  async initAssitant(body: IAssistantInstructions): Promise<string> {
     const assistant = await openai.beta.assistants.create({
       name: "Polyglot",
       instructions: `Please address the user as ${body.userRole}. Play the role of ${body.chatRole}. Answer only in ${body.language}`,
@@ -20,13 +20,14 @@ export class Assistant {
     return thread.id;
   }
 
-  async addMessageToThread(threadId, assitantId, content) {
+  async addMessageToThread(body: ISendMessage) {
+    const { threadId, assistantId, content } = body;
     const message = await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content,
     });
     const runData = await openai.beta.threads.runs.create(threadId, {
-      assistant_id: assitantId,
+      assistant_id: assistantId,
     });
     let runStatus = runData.status;
     while (runStatus === "queued" || runStatus === "in_progress") {
