@@ -9,6 +9,7 @@ import {
 @Middleware({ type: "after" })
 export class ErrorHandler implements ExpressErrorMiddlewareInterface {
   error(error: any, req: Request, res: Response, next: NextFunction): void {
+    console.log(error);
     if (error instanceof ApiError) {
       res.status(error.httpCode).json({ error: error.message });
     } else if (error instanceof NotFoundError) {

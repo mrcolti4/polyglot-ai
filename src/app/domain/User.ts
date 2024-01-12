@@ -1,8 +1,9 @@
 import admin from "firebase-admin";
-import { JsonController, Get, Post, Body, Param } from "routing-controllers";
+import { JsonController, Post, Body, Param } from "routing-controllers";
 
-import { IUserInfo, IUserRegister, IUserResetPassword } from "./User.type";
+import { IUserInfo, IUserRegister, IUserResetPassword } from "types/user";
 import { ApiResponse } from "helpers/ApiResponse";
+import { db } from "utils/Firebase";
 
 @JsonController("/user")
 export default class User {
@@ -13,6 +14,7 @@ export default class User {
 
     const user = await auth.createUser({ email, password, displayName });
     const token = await auth.createCustomToken(user.uid, { subscription });
+    await db.collection("user-info").doc(user.uid).create({ subscription });
 
     return new ApiResponse(
       true,

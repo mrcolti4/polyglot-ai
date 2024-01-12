@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import admin from "firebase-admin";
 import {
   JsonController,
   UseBefore,
@@ -8,20 +8,21 @@ import {
   Param,
   Req,
 } from "routing-controllers";
-import { Request } from "express";
+import { v4 as uuid } from "uuid";
 
-import { ApiResponse } from "../../helpers/ApiResponse";
-import { IPolyglotConversation } from "./Polyglot.types";
-import { Authenticate } from "app/middlewares/authenticate";
+import { IAssistantInstructions } from "types/assistant-instructions";
+import { ISendMessage } from "types/send-message";
 import { AuthRequest } from "types/controllerAction";
-
-import { db } from "Firebase";
-import { openai } from "Chat";
+import { Assistant } from "utils/Assistant";
+import { db } from "utils/Firebase";
+import { ApiResponse } from "helpers/ApiResponse";
 import { ApiError } from "helpers/ApiError";
+import { Authenticate } from "app/middlewares/authenticate";
 
 @JsonController("/polyglot")
 @UseBefore(Authenticate)
 export default class Polyglot {
+  private assistantApi: Assistant = new Assistant();
   @Get("/get-info")
   async getSecretInfo(@Req() req: AuthRequest) {
     const { user } = req;
@@ -33,40 +34,71 @@ export default class Polyglot {
     return new ApiResponse(true, data.data(), `Get secured data`);
   }
 
-  @Post("/start-conversation")
-  async startConversation(
-    @Body() body: IPolyglotConversation,
+  @Get("/get-current-conversation/:id")
+  async getCurrentConversation(
     @Req() req: AuthRequest,
+    @Param("id") id: string,
   ) {
     const { user } = req;
-    const userInfo = db.collection("user-info").doc(user.uid);
-    const userDoc = await userInfo.get();
-    if (userDoc.exists) {
-      await userInfo.update({ conversation: [{ ...body }] });
+    const userRef = db.collection("user-info").doc(user.uid);
+    const userData = await userRef.get();
+    const convArr = <any[]>userData.data()?.conversations;
 
-      return new ApiResponse(true, body, `Update document ${user.uid}`);
-    }
-    await userInfo.create({ conversation: [{ ...body }] });
+    const currentConv = convArr.find((item, i, arr) => item.id === id);
 
-    return new ApiResponse(true, body, `Create document ${user.uid}`);
+    return new ApiResponse(
+      true,
+      currentConv,
+      `Current conversation: ${currentConv.threadId}`,
+    );
+  }
+
+  @Post("/start-conversation")
+  async startConversation(
+    @Body() body: IAssistantInstructions,
+    @Req() req: AuthRequest,
+  ) {
+    let { assistantApi } = this;
+    const { user } = req;
+    // Initialize assistent with given roles
+    const assistantId = await assistantApi.initAssitant(body);
+    // Create separate thread for conversation
+    const threadId = await assistantApi.createThread();
+    const id = uuid();
+    const convObj = {
+      id,
+      threadId,
+      assistantId,
+      convInfo: { ...body },
+    };
+    const userRef = db.collection("user-info").doc(user.uid);
+
+    await userRef.update({
+      conversations: admin.firestore.FieldValue.arrayUnion(convObj),
+    });
+
+    return new ApiResponse(
+      true,
+      { id, threadId, assistantId },
+      `Create conversation thread: ${threadId}, assistant: ${assistantId}`,
+    );
   }
 
   @Post("/send-message")
-  async sendMessageToAi(@Body() body: OpenAI.Chat.ChatCompletionMessage) {
-    const { role, content } = body;
-    const params: OpenAI.Chat.ChatCompletionCreateParams = {
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are helpful assistant. Answer on questions.",
-        },
-        { role, content },
-      ],
-    };
-    const response: OpenAI.Chat.ChatCompletion =
-      await openai.chat.completions.create(params);
+  async sendMessageToAi(@Req() req: AuthRequest, @Body() body: ISendMessage) {
+    const { user } = req;
+    const { assistantApi } = this;
 
-    return new ApiResponse(true, response, "Chat gave answer");
+    const messages = await assistantApi.addMessageToThread(body);
+
+    const responseObj = {
+      [body.threadId]: messages,
+    };
+
+    db.collection("user-info")
+      .doc(user.uid)
+      .update({ messages: admin.firestore.FieldValue.arrayUnion(responseObj) });
+
+    return new ApiResponse(true, messages, `Assistant respond!`);
   }
 }
