@@ -3,10 +3,13 @@ import { ISendMessage } from "types/send-message";
 import { IAssistantInstructions } from "types/assistant-instructions";
 import OpenAI from "openai";
 
+type annotations = (OpenAI.Beta.Threads.Messages.MessageContentText.Text.FileCitation | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FilePath);
 interface IMessageObject {
     role: "user" | "assistant";
+    messageId: string;
     value: string;
-    annotations: (OpenAI.Beta.Threads.Messages.MessageContentText.Text.FileCitation | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FilePath)[]
+    annotations: annotations[];
+    audioUrl: string;
 }
 
 export class Assistant {
@@ -48,20 +51,24 @@ export class Assistant {
         runStatus = statusData.status;
       }
       if (runStatus === "completed") {
-        const { data } = await openai.beta.threads.messages.list(threadId);
+        const { data } = await openai.beta.threads.messages.list(threadId); //thread_Gd5HwLLNI07XBs5DXYs7VoLY
         const messages: IMessageObject[] = data.flatMap(
           (message) =>
             message?.content.map((content) =>
               content.type === "text"
                 ? {
                       role: message.role,
+                      messageId: message.id,
+                      audioUrl: "",
                       ...content.text,
                   }
                 : 
                 {
                   role: message.role,
+                  messageId: "",
                   value: "",
                   annotations: [],
+                  audioUrl: "",
                 }
             )
         );
