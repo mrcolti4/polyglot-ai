@@ -7,11 +7,8 @@ import {
   Body,
   Param,
   Req,
-  Res,
 } from "routing-controllers";
-import { Response, Request } from "express";
 import { v4 as uuid } from "uuid";
-import getRawBody from "raw-body";
 
 import { IAssistantInstructions } from "types/assistant-instructions";
 import { ISendMessage } from "types/send-message";
@@ -25,15 +22,12 @@ import { ApiResponse } from "helpers/ApiResponse";
 import { ApiError } from "helpers/ApiError";
 
 import { Authenticate } from "app/middlewares/authenticate";
-import { openai } from "utils/OpenAI";
-import { MessageContentText } from "openai/resources/beta/threads/messages/messages";
 import { voice } from "types/tts";
 import { PassThrough } from "stream";
 
 @JsonController("/polyglot")
-// @UseBefore(Authenticate)
+@UseBefore(Authenticate)
 export default class Polyglot {
-  // constructor(private readonly AudioProcess: AudioProcessing){}
   private AudioProcess: AudioProcessing = new AudioProcessing();
   private AssistantApi: Assistant = new Assistant();
   @Get("/get-info")
@@ -50,12 +44,10 @@ export default class Polyglot {
   @Get("/get-current-conversation/:id")
   async getCurrentConversation(
     @Req() req: AuthRequest,
-    @Param("id") id: string
+    @Param("id") id: string,
   ) {
     const { user } = req;
-    const userRef = db
-      .collection("user-info")
-      .doc("IIWzdJPORMgMHXMIUOfHy9QAKul2");
+    const userRef = db.collection("user-info").doc(user.uid);
     const userData = await userRef.get();
     const convArr = <any[]>userData.data()?.conversations;
 
@@ -64,14 +56,14 @@ export default class Polyglot {
     return new ApiResponse(
       true,
       currentConv,
-      `Current conversation: ${currentConv.id}`
+      `Current conversation: ${currentConv.id}`,
     );
   }
 
   @Post("/start-conversation")
   async startConversation(
     @Body() body: IAssistantInstructions,
-    @Req() req: AuthRequest
+    @Req() req: AuthRequest,
   ) {
     let { AssistantApi } = this;
     const { user } = req;
@@ -86,9 +78,7 @@ export default class Polyglot {
       assistantId,
       convInfo: { ...body },
     };
-    const userRef = db
-      .collection("user-info")
-      .doc("IIWzdJPORMgMHXMIUOfHy9QAKul2");
+    const userRef = db.collection("user-info").doc(user.uid);
 
     await userRef.update({
       conversations: admin.firestore.FieldValue.arrayUnion(convObj),
@@ -97,14 +87,14 @@ export default class Polyglot {
     return new ApiResponse(
       true,
       { id, threadId, assistantId },
-      `Create conversation thread: ${threadId}, assistant: ${assistantId}`
+      `Create conversation thread: ${threadId}, assistant: ${assistantId}`,
     );
   }
 
   @Post("/send-message")
   async sendMessageToAi(
     @Req() req: TypedRequest<{ lang: string; voice: voice }>,
-    @Body() body: ISendMessage
+    @Body() body: ISendMessage,
   ) {
     const { user } = req;
     const { AssistantApi, AudioProcess } = this;
@@ -121,7 +111,7 @@ export default class Polyglot {
     });
     // Save file via createWriteStream
     const file = bucket.file(
-      `messageSpeech/${body.threadId}/${response[0].messageId}.wav`
+      `messageSpeech/${body.threadId}/${response[0].messageId}.wav`,
     );
     // Create write/read stream and pass audio buffer
     const bufferStream = new PassThrough();
@@ -132,7 +122,7 @@ export default class Polyglot {
           metadata: {
             contentType: "audio/mpeg",
           },
-        })
+        }),
       )
       // On file write error return response
       .on("error", () => {
@@ -146,47 +136,5 @@ export default class Polyglot {
       });
 
     return new ApiResponse(true, response, `Assistant respond!`);
-  }
-
-  @Get("/get-file/:url")
-  async getFile(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Param("url") url: string
-  ) {
-    const newUrl = url.replace(/\+/g, "/");
-
-    const range = req.headers?.["content-range"] || "";
-    console.log(range);
-    console.log(req.headers)
-    if (!range) {
-      res.status(416).send("Range not satisfiable");
-    }
-
-    const file = bucket.file(
-      `${newUrl}?alt=media&token=4a61620d-1245-4e11-92f8-12ee274da565`
-    );
-
-    const size = Number(file.metadata.size) || 10 ** 6;
-    console.log(file.metadata);
-  
-    const CHUNK_SIZE = 10 ** 6;
-    // const start = Number(range.replace(/\D/g, ""));
-    // const end = Math.min(start + CHUNK_SIZE, size - 1);
-    const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
-    const contentLength = end - start + 1;
-    const headers = {
-      "Content-Range": `bytes ${start}-${end}/${size}`,
-      "Accept-Ranges": "bytes",
-      "Content-Length": contentLength,
-      "Content-Type": "video/mp4",
-    };
-
-    res.writeHead(206, headers);
-
-    const readStream = file.createReadStream({ start, end });
-    readStream.pipe(res);
   }
 }

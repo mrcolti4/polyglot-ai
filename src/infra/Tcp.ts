@@ -33,8 +33,8 @@ export class Tcp implements IServices {
     });
 
     return new Promise<boolean>((resolve) => {
-      server.listen(4000, () => {
-        console.log("Server is running on port 4000");
+      server.listen(3000, () => {
+        console.log(`Server is running on port 3000`);
 
         return resolve(true);
       });

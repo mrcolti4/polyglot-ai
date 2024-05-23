@@ -3,13 +3,15 @@ import { ISendMessage } from "types/send-message";
 import { IAssistantInstructions } from "types/assistant-instructions";
 import OpenAI from "openai";
 
-type annotations = (OpenAI.Beta.Threads.Messages.MessageContentText.Text.FileCitation | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FilePath);
+type annotations =
+  | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FileCitation
+  | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FilePath;
 interface IMessageObject {
-    role: "user" | "assistant";
-    messageId: string;
-    value: string;
-    annotations: annotations[];
-    audioUrl: string;
+  role: "user" | "assistant";
+  messageId: string;
+  value: string;
+  annotations: annotations[];
+  audioUrl: string;
 }
 
 export class Assistant {
@@ -31,52 +33,49 @@ export class Assistant {
   }
 
   async addMessageToThread(body: ISendMessage): Promise<IMessageObject[]> {
-      const { threadId, assistantId, content } = body;
-      const message = await openai.beta.threads.messages.create(threadId, {
-        role: "user",
-        content,
-      });
-      const runData = await openai.beta.threads.runs.create(threadId, {
-        assistant_id: assistantId,
-      });
-      let runStatus = runData.status;
-      while (runStatus === "queued" || runStatus === "in_progress") {
-        console.log("Polling for run status...");
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        const statusData = await openai.beta.threads.runs.retrieve(
-          threadId,
-          runData.id
-        );
-        console.log(`Current status: ${statusData.status}`);
-        runStatus = statusData.status;
-      }
-      if (runStatus === "completed") {
-        const { data } = await openai.beta.threads.messages.list(threadId); //thread_Gd5HwLLNI07XBs5DXYs7VoLY
-        const messages: IMessageObject[] = data.flatMap(
-          (message) =>
-            message?.content.map((content) =>
-              content.type === "text"
-                ? {
-                      role: message.role,
-                      messageId: message.id,
-                      audioUrl: "",
-                      ...content.text,
-                  }
-                : 
-                {
-                  role: message.role,
-                  messageId: "",
-                  value: "",
-                  annotations: [],
-                  audioUrl: "",
-                }
-            )
-        );
+    const { threadId, assistantId, content } = body;
+    const message = await openai.beta.threads.messages.create(threadId, {
+      role: "user",
+      content,
+    });
+    const runData = await openai.beta.threads.runs.create(threadId, {
+      assistant_id: assistantId,
+    });
+    let runStatus = runData.status;
+    while (runStatus === "queued" || runStatus === "in_progress") {
+      console.log("Polling for run status...");
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const statusData = await openai.beta.threads.runs.retrieve(
+        threadId,
+        runData.id,
+      );
+      console.log(`Current status: ${statusData.status}`);
+      runStatus = statusData.status;
+    }
+    if (runStatus === "completed") {
+      const { data } = await openai.beta.threads.messages.list(threadId); //thread_Gd5HwLLNI07XBs5DXYs7VoLY
+      const messages: IMessageObject[] = data.flatMap((message) =>
+        message?.content.map((content) =>
+          content.type === "text"
+            ? {
+                role: message.role,
+                messageId: message.id,
+                audioUrl: "",
+                ...content.text,
+              }
+            : {
+                role: message.role,
+                messageId: "",
+                value: "",
+                annotations: [],
+                audioUrl: "",
+              },
+        ),
+      );
 
-        return messages;
-      }
-      else {
-        return []
-      }
+      return messages;
+    } else {
+      return [];
+    }
   }
 }
