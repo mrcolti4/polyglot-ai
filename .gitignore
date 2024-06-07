@@ -1,4 +1,5 @@
 node_modules
-compose.yaml
 secret
 README.Docker.md
+recipe-method.md 
+temp/

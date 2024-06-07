@@ -1,0 +1,17 @@
+services:
+  server:
+    build:
+      context: .
+      target: dev
+    env_file:
+      - secret/password.txt
+    ports:
+      - 3000:3000
+    secrets:
+      - db-password
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+secrets:
+  db-password:
+    file: secret/password.txt

@@ -1,6 +1,18 @@
-import { openai } from "utils/Chat";
+import { openai } from "utils/OpenAI";
 import { ISendMessage } from "types/send-message";
 import { IAssistantInstructions } from "types/assistant-instructions";
+import OpenAI from "openai";
+
+type annotations =
+  | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FileCitation
+  | OpenAI.Beta.Threads.Messages.MessageContentText.Text.FilePath;
+interface IMessageObject {
+  role: "user" | "assistant";
+  messageId: string;
+  value: string;
+  annotations: annotations[];
+  audioUrl: string;
+}
 
 export class Assistant {
   constructor() {}
@@ -20,7 +32,7 @@ export class Assistant {
     return thread.id;
   }
 
-  async addMessageToThread(body: ISendMessage) {
+  async addMessageToThread(body: ISendMessage): Promise<IMessageObject[]> {
     const { threadId, assistantId, content } = body;
     const message = await openai.beta.threads.messages.create(threadId, {
       role: "user",
@@ -41,12 +53,29 @@ export class Assistant {
       runStatus = statusData.status;
     }
     if (runStatus === "completed") {
-      const messages = await openai.beta.threads.messages.list(threadId);
-      for (let i = 0; i < messages.data.length; i++) {
-        const message = messages.data[0].content;
-        console.log(message);
-      }
-      return messages.data;
+      const { data } = await openai.beta.threads.messages.list(threadId); //thread_Gd5HwLLNI07XBs5DXYs7VoLY
+      const messages: IMessageObject[] = data.flatMap((message) =>
+        message?.content.map((content) =>
+          content.type === "text"
+            ? {
+                role: message.role,
+                messageId: message.id,
+                audioUrl: "",
+                ...content.text,
+              }
+            : {
+                role: message.role,
+                messageId: "",
+                value: "",
+                annotations: [],
+                audioUrl: "",
+              },
+        ),
+      );
+
+      return messages;
+    } else {
+      return [];
     }
   }
 }

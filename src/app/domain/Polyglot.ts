@@ -12,17 +12,24 @@ import { v4 as uuid } from "uuid";
 
 import { IAssistantInstructions } from "types/assistant-instructions";
 import { ISendMessage } from "types/send-message";
-import { AuthRequest } from "types/controllerAction";
+import { AuthRequest, TypedRequest } from "types/controllerAction";
+
+import { AudioProcessing } from "utils/AudioProcessing";
 import { Assistant } from "utils/Assistant";
-import { db } from "utils/Firebase";
+import { db, bucket } from "utils/Firebase";
+
 import { ApiResponse } from "helpers/ApiResponse";
 import { ApiError } from "helpers/ApiError";
+
 import { Authenticate } from "app/middlewares/authenticate";
+import { voice } from "types/tts";
+import { PassThrough } from "stream";
 
 @JsonController("/polyglot")
 @UseBefore(Authenticate)
 export default class Polyglot {
-  private assistantApi: Assistant = new Assistant();
+  private AudioProcess: AudioProcessing = new AudioProcessing();
+  private AssistantApi: Assistant = new Assistant();
   @Get("/get-info")
   async getSecretInfo(@Req() req: AuthRequest) {
     const { user } = req;
@@ -49,7 +56,7 @@ export default class Polyglot {
     return new ApiResponse(
       true,
       currentConv,
-      `Current conversation: ${currentConv.threadId}`,
+      `Current conversation: ${currentConv.id}`,
     );
   }
 
@@ -58,12 +65,12 @@ export default class Polyglot {
     @Body() body: IAssistantInstructions,
     @Req() req: AuthRequest,
   ) {
-    let { assistantApi } = this;
+    let { AssistantApi } = this;
     const { user } = req;
     // Initialize assistent with given roles
-    const assistantId = await assistantApi.initAssitant(body);
+    const assistantId = await AssistantApi.initAssitant(body);
     // Create separate thread for conversation
-    const threadId = await assistantApi.createThread();
+    const threadId = await AssistantApi.createThread();
     const id = uuid();
     const convObj = {
       id,
@@ -85,20 +92,49 @@ export default class Polyglot {
   }
 
   @Post("/send-message")
-  async sendMessageToAi(@Req() req: AuthRequest, @Body() body: ISendMessage) {
+  async sendMessageToAi(
+    @Req() req: TypedRequest<{ lang: string; voice: voice }>,
+    @Body() body: ISendMessage,
+  ) {
     const { user } = req;
-    const { assistantApi } = this;
+    const { AssistantApi, AudioProcess } = this;
+    const { lang, voice } = req.query;
+    // Get response from assistant
+    const response = await AssistantApi.addMessageToThread(body);
+    console.log(response);
 
-    const messages = await assistantApi.addMessageToThread(body);
+    // Get audio content, format base64
+    const audioContent = await AudioProcess.TTS({
+      text: response[0].value,
+      languageCode: lang,
+      ssmlGender: voice,
+    });
+    // Save file via createWriteStream
+    const file = bucket.file(
+      `messageSpeech/${body.threadId}/${response[0].messageId}.wav`,
+    );
+    // Create write/read stream and pass audio buffer
+    const bufferStream = new PassThrough();
+    bufferStream.end(Buffer.from(audioContent));
+    bufferStream
+      .pipe(
+        file.createWriteStream({
+          metadata: {
+            contentType: "audio/mpeg",
+          },
+        }),
+      )
+      // On file write error return response
+      .on("error", () => {
+        return new ApiResponse(true, response, `Assistant respond!`);
+      })
+      // On file write success return response with audioUrl
+      .on("finish", () => {
+        console.log("finished: " + file.publicUrl());
+        response[0].audioUrl = file.publicUrl();
+        return new ApiResponse(true, response, "Link: " + file.publicUrl());
+      });
 
-    const responseObj = {
-      [body.threadId]: messages,
-    };
-
-    db.collection("user-info")
-      .doc(user.uid)
-      .update({ messages: admin.firestore.FieldValue.arrayUnion(responseObj) });
-
-    return new ApiResponse(true, messages, `Assistant respond!`);
+    return new ApiResponse(true, response, `Assistant respond!`);
   }
 }
